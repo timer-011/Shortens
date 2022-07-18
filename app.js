@@ -1,65 +1,56 @@
-const express = require('express')
-const app = express()
-const mongoose = require('mongoose')
-// import the model here
-const ShortURL = require('./models/url')
+const mongoose = require('mongoose');
+const express = require('express');
+const app = express();
+const Link = require('./models/Link');
+const id = require('randomstring');
 
-app.set('view engine', 'ejs')
-app.use(express.urlencoded({ extended: false }))
+//  MIDDLEWARE
+app.set('view engine', 'ejs');
+app.use(express.urlencoded({extended: false}));
+app.use(express.json());
+
+const db = mongoose.connect('mongodb://localhost/Shortens', {
+    useNewUrlParser: true,
+    useUnifiedTopology: true
+}, (err) => {
+    if(err)
+        console.log('Mongo error');
+    else
+        console.log('MongoDB connected');
+});
 
 app.get('/', async (req, res) => {
-	const allData = await ShortURL.find()
-	res.render('index', { shortUrls: allData })
+    const list = await Link.find({});
+    // console.log(list);
+    res.render('index.ejs', {title: 'Shortens', list});
+
 })
 
-app.post('/short', async (req, res) => {
-	// Grab the fullUrl parameter from the req.body
-	const fullUrl = req.body.fullUrl
-	console.log('URL requested: ', fullUrl)
-
-	// insert and wait for the record to be inserted using the model
-	const record = new ShortURL({
-		full: fullUrl
-	})
-
-	await record.save()
-
-	res.redirect('/')
+app.get('/:url', async (req, res) => {
+    const item = await Link.findOne({
+        shorten: req.params.url
+    });
+    if(!item)
+        return res.status(404); //  not found
+    console.log(item);
+    res.redirect(item.link);
+    // res.send('Thankyou for your response');
 })
 
-app.get('/:shortid', async (req, res) => {
-	// grab the :shortid param
-	const shortid = req.params.shortid
+app.post('/link', async (req, res) => {
+    console.log('received a post request');
+    const {newLink} = req.body;
+    console.log(newLink);
 
-	// perform the mongoose call to find the long URL
-	const rec = await ShortURL.findOne({ short: shortid })
+    const newEntry = await Link.create({
+        link: newLink,
+        shorten: id.generate(6)
+    });
 
-	// if null, set status to 404 (res.sendStatus(404))
-	if (!rec) return res.sendStatus(404)
-
-	// if not null, increment the click count in database
-	rec.clicks++
-	await rec.save()
-
-	// redirect the user to original link
-	res.redirect(rec.full)
+    console.log(newEntry);
+    res.redirect('/');
 })
 
-// Setup your mongodb connection here
-mongoose.connect('mongodb://localhost:27017/shortens', {
-	useNewUrlParser: true,
-	useUnifiedTopology: true
-})
-
-mongoose.connection.on('open', async () => {
-	// Wait for mongodb connection before server starts
-
-	// Just 2 URLs for testing purpose
-	await ShortURL.create({ full: 'http://google.com', short: '5xr' })
-
-	process.env.PUBLIC_PORT = 3000;
-	app.listen(process.env.PUBLIC_PORT, () => {
-		console.log('Server started');
-		console.log(process.env.PUBLIC_PORT);
-	})
-})
+app.listen(3000, () => {
+    console.log('Listening on PORT 3000');
+});
